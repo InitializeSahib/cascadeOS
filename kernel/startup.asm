@@ -1,3 +1,4 @@
+global startup
 extern kernel_main
 section .startup
 bits 32
