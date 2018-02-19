@@ -1,0 +1,34 @@
+#!/bin/bash
+build() {
+	if [ ! -f "./echfs-utils.c" ]; then
+		info "Retrieving echfs-utils"
+	    wget https://raw.githubusercontent.com/echidnaOS/echidnaOS/master/echidnafs/echfs-utils.c
+	fi
+	if [ ! -f "./echfs-utils" ]; then
+		info "Building echfs-utils"
+		gcc -O2 echfs-utils.c -o echfs-utils
+	fi
+	info "Assembling bootloader/bootloader.asm"
+	nasm bootloader/bootloader.asm -f bin -o cascade.bin
+	info "Padding cascade.bin"
+	dd bs=32768 count=256 if=/dev/zero cascade.bin 2>/dev/null
+	info "Truncating cascade.bin"
+	truncate --size=-4096 cascade.bin
+	info "Formatting cascade.bin as echfs"
+	./echfs-utils cascade.img format 32768
+	info "Compiling kernel/output.c"
+	clang -target i386-elf -m32 -nostdlib -ffreestanding -c kernel/output.c -Ikernel/include -o kernel/output.o
+	info "Compiling kernel/main.c"
+	clang -target i386-elf -m32 -nostdlib -ffreestanding -c kernel/main.c -Ikernel/include -o kernel/main.o
+	info "Assembling kernel/startup.asm"
+	nasm kernel/startup.asm -f elf32 -o kernel/startup.o
+	info "Linking kernel.bin"
+	clang -target i386-elf kernel/startup.o kernel/main.o kernel/output.o -nostdlib -T kernel/linker.ld -o kernel.bin
+	info "Adding kernel.bin into cascade.bin"
+	./echfs-utils cascade.img import kernel.bin kernel.bin
+	success "Built cascadeOS"
+    return 0
+}
+default() {
+    build
+}
